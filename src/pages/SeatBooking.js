@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import "./seat.css";
 
+const API_URL = "https://eduslot-smart-class.onrender.com";
+
 export default function SeatBooking() {
   const [selectedSeat, setSelectedSeat] = useState(null);
   const [bookedSeats, setBookedSeats] = useState([]);
@@ -32,44 +34,53 @@ export default function SeatBooking() {
   }, []);
 
   useEffect(() => {
-    const isBookedLocal = (n) =>
-      bookedSeats.some(
-        (s) => s.seatNumber === n && s.isBooked
-      );
-
     const myBooked = bookedSeats.find(
-      (s) => s.bookedBy === userEmail
+      (s) => s.bookedBy === userEmail && s.isBooked
     );
 
     if (myBooked) {
       setMySeat(myBooked.seatNumber);
       setSelectedSeat(null);
     } else {
-      const avail = seats.find(
-        (s) => !isBookedLocal(s)
+      setMySeat(null);
+
+      const firstAvailable = seats.find(
+        (seat) =>
+          !bookedSeats.some(
+            (s) => s.seatNumber === seat && s.isBooked
+          )
       );
 
-      if (avail) {
-        setSelectedSeat(avail);
+      if (firstAvailable) {
+        setSelectedSeat(firstAvailable);
       }
     }
   }, [bookedSeats, seats, userEmail]);
+
+  const showToast = (msg, type = "success") => {
+    setToast({ msg, type });
+
+    setTimeout(() => {
+      setToast(null);
+    }, 3000);
+  };
 
   const fetchSeats = async () => {
     try {
       if (!token) {
         showToast("Please login again", "error");
+        setLoading(false);
         return;
       }
 
       const res = await axios.get(
-  "http://localhost:5000/api/seat",
-  {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  }
-);
+        `${API_URL}/api/seat`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
       setBookedSeats(res.data);
     } catch (err) {
@@ -88,16 +99,11 @@ export default function SeatBooking() {
     }
   };
 
-  const showToast = (msg, type = "success") => {
-    setToast({ msg, type });
-
-    setTimeout(() => {
-      setToast(null);
-    }, 3000);
-  };
-
   const handleBook = async () => {
-    if (!selectedSeat) return;
+    if (!selectedSeat) {
+      showToast("Please select a seat", "error");
+      return;
+    }
 
     if (!token) {
       showToast("Please login again", "error");
@@ -108,9 +114,10 @@ export default function SeatBooking() {
 
     try {
       await axios.post(
-        "http://localhost:5000/api/seat/book",
+        `${API_URL}/api/seat/book`,
         {
           seatNumber: selectedSeat,
+          userEmail: userEmail,
         },
         {
           headers: {
@@ -120,39 +127,44 @@ export default function SeatBooking() {
       );
 
       showToast(
-        `Seat #${selectedSeat} booked successfully! 🎉`
+        `Seat #${selectedSeat} booked successfully! 🎉`,
+        "success"
       );
 
-      fetchSeats();
+      await fetchSeats();
+
     } catch (err) {
       console.log(
         "Booking error:",
         err.response?.data || err.message
       );
 
-      showToast(
-  err.response?.data?.message ||
-  err.response?.data ||
-  "Booking failed",
-  "error"
-);
+      if (err.response?.status === 401) {
+        showToast("Session expired. Please login again", "error");
+      } else {
+        showToast(
+          err.response?.data?.message ||
+            "Booking failed. Please try again.",
+          "error"
+        );
+      }
     } finally {
       setBooking(false);
     }
   };
 
-  const isBooked = (n) =>
+  const isBooked = (seatNumber) =>
     bookedSeats.some(
-      (s) => s.seatNumber === n && s.isBooked
+      (s) => s.seatNumber === seatNumber && s.isBooked
     );
 
   const bookedCount = bookedSeats.filter(
     (s) => s.isBooked
   ).length;
 
-  const bookedBy = (n) =>
+  const bookedBy = (seatNumber) =>
     bookedSeats.find(
-      (s) => s.seatNumber === n && s.isBooked
+      (s) => s.seatNumber === seatNumber && s.isBooked
     )?.bookedBy;
 
   return (
@@ -316,14 +328,15 @@ export default function SeatBooking() {
 
                 let cls = "seat-cell";
 
-                if (ismine)
+                if (ismine) {
                   cls += " seat-mine";
-                else if (booked)
+                } else if (booked) {
                   cls += " seat-booked";
-                else if (selected)
+                } else if (selected) {
                   cls += " seat-selected";
-                else
+                } else {
                   cls += " seat-free";
+                }
 
                 return (
                   <div
@@ -332,11 +345,11 @@ export default function SeatBooking() {
                     style={{
                       animationDelay: `${i * 0.03}s`,
                     }}
-                    onClick={() =>
-                      !booked &&
-                      !mySeat &&
-                      setSelectedSeat(seat)
-                    }
+                    onClick={() => {
+                      if (!booked && !mySeat) {
+                        setSelectedSeat(seat);
+                      }
+                    }}
                     onMouseEnter={() =>
                       setHoveredSeat(seat)
                     }
@@ -393,9 +406,7 @@ export default function SeatBooking() {
             ) : mySeat ? (
               "✅ Already Booked"
             ) : (
-              `Confirm Seat #${
-                selectedSeat || "—"
-              }`
+              `Confirm Seat #${selectedSeat || "—"}`
             )}
           </button>
         </div>
