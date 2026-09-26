@@ -1,60 +1,94 @@
 const express = require("express");
 const router = express.Router();
+
 const Seat = require("../models/Seat");
-const authMiddleware = require("../middleware/authMiddleware");
 const Notification = require("../models/Notification");
-// ✅ Get all seats
+const authMiddleware = require("../middleware/authMiddleware");
+
+// Get all seats
 router.get("/", authMiddleware, async (req, res) => {
   try {
     const seats = await Seat.find();
     res.json(seats);
   } catch (err) {
-    res.status(500).json("Error fetching seats");
+    console.log("Fetch seats error:", err);
+    res.status(500).json({
+      message: "Error fetching seats"
+    });
   }
 });
 
-
-// ✅ Book seat
+// Book seat
 router.post("/book", authMiddleware, async (req, res) => {
   try {
-   const { seatNumber } = req.body;
-const userEmail = req.user.email;
+    const { seatNumber } = req.body;
+    const userEmail = req.user.email;
 
-    // ❗ Check if user already booked
-    const alreadyBooked = await Seat.findOne({ bookedBy: userEmail });
-console.log("Booking email:", userEmail);
-console.log("Already booked:", alreadyBooked);
-    if (alreadyBooked) {
-      return res.status(400).json("You already booked a seat");
+    console.log("Seat requested:", seatNumber);
+    console.log("User:", userEmail);
+
+    if (!seatNumber) {
+      return res.status(400).json({
+        message: "Seat number is required"
+      });
     }
 
-    // ❗ Check if seat already booked
-    const seat = await Seat.findOne({ seatNumber });
+    // Check whether user already has a booking
+    const alreadyBooked = await Seat.findOne({
+      bookedBy: userEmail,
+      isBooked: true
+    });
+
+    if (alreadyBooked) {
+      return res.status(400).json({
+        message: "You already booked a seat"
+      });
+    }
+
+    // Check selected seat
+    const seat = await Seat.findOne({
+      seatNumber: Number(seatNumber)
+    });
 
     if (seat && seat.isBooked) {
-      return res.status(400).json("Seat already booked");
+      return res.status(400).json({
+        message: "Seat already booked"
+      });
     }
 
-    const newSeat = await Seat.findOneAndUpdate(
-      { seatNumber },
-      { 
-        isBooked: true, 
+    // Book seat
+    const bookedSeat = await Seat.findOneAndUpdate(
+      { seatNumber: Number(seatNumber) },
+      {
+        seatNumber: Number(seatNumber),
+        isBooked: true,
         bookedBy: userEmail,
-        bookedAt: new Date()   // 🔥 advanced feature
+        bookedAt: new Date()
       },
-      { new: true, upsert: true }
+      {
+        new: true,
+        upsert: true
+      }
     );
 
-    res.json(newSeat);
+    console.log("Booking successful:", bookedSeat);
+
+    res.status(200).json({
+      message: "Seat booked successfully",
+      seat: bookedSeat
+    });
 
   } catch (err) {
-    console.log(err);
-    res.status(500).json("Booking failed");
+    console.log("BOOKING ERROR:", err);
+
+    res.status(500).json({
+      message: "Booking failed",
+      error: err.message
+    });
   }
 });
 
-
-// 🔁 RESET ALL SEATS (Teacher Feature)
+// Reset all seats
 router.delete("/reset", async (req, res) => {
   try {
     await Seat.updateMany(
@@ -77,11 +111,14 @@ router.delete("/reset", async (req, res) => {
 
   } catch (err) {
     console.log("Reset error:", err);
+
     res.status(500).json({
       message: "Reset failed"
     });
   }
 });
+
+// Get latest notification
 router.get("/notification", authMiddleware, async (req, res) => {
   try {
     const notification = await Notification.findOne()
