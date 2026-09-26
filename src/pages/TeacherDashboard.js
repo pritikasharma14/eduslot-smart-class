@@ -72,38 +72,34 @@ export default function TeacherDashboard() {
 
   // Reset all seats
   const resetSeats = async () => {
-  try {
-    const token = localStorage.getItem("token");
+    try {
+      const token = localStorage.getItem("token");
 
-    console.log("Reset button clicked");
-    console.log("Token exists:", !!token);
-
-    if (!token) {
-      navigate("/");
-      return;
-    }
-
-    const response = await axios.delete(
-      "https://eduslot-smart-class.onrender.com/api/seat/reset",
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+      if (!token) {
+        navigate("/");
+        return;
       }
-    );
 
-    console.log("Reset response:", response.data);
+      await axios.delete(
+        `${API_URL}/api/seat/reset`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
-    setConfirm(false);
+      setConfirm(false);
 
-    await fetchSeats();
-  } catch (err) {
-    console.log(
-      "RESET ERROR:",
-      err.response?.data || err.message
-    );
-  }
-};
+      // Fetch updated seat data
+      await fetchSeats();
+    } catch (err) {
+      console.log(
+        "Reset error:",
+        err.response?.data || err.message
+      );
+    }
+  };
 
   // Only booked seats
   const bookedSeats = seats.filter(

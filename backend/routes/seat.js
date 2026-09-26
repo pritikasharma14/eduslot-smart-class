@@ -91,8 +91,6 @@ router.post("/book", authMiddleware, async (req, res) => {
 // Reset all seats
 router.delete("/reset", async (req, res) => {
   try {
-    console.log("RESET ROUTE HIT");
-
     await Seat.updateMany(
       {},
       {
@@ -102,26 +100,20 @@ router.delete("/reset", async (req, res) => {
       }
     );
 
-    console.log("Seats reset successfully");
-
-    const notification = await Notification.create({
+    await Notification.create({
       message:
         "Teacher has reset all seats. Your previous seat booking has been cancelled. Please book a new seat."
     });
 
-    console.log("NOTIFICATION CREATED:", notification);
-
-    res.status(200).json({
-      message: "All seats reset successfully",
-      notification: notification
+    res.json({
+      message: "All seats reset successfully"
     });
 
   } catch (err) {
-    console.log("RESET ERROR:", err);
+    console.log("Reset error:", err);
 
     res.status(500).json({
-      message: "Reset failed",
-      error: err.message
+      message: "Reset failed"
     });
   }
 });
